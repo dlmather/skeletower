@@ -4,7 +4,7 @@ __lua__
 -- skelly tower
 -- by dave and elaine
 
-mapx_off=0
+map_x_off=0
 
 p1=
 {
@@ -98,8 +98,8 @@ end
 -- gui
 
 function playerstats()
-    print("health:"..tostr(p1.hp), mapx_off, 122, 8)
-    print("cash:"..tostr(p1.cash), mapx_off+64, 122, 9)
+    print("health:"..tostr(p1.hp), map_x_off, 122, 8)
+    print("cash:"..tostr(p1.cash), map_x_off+64, 122, 9)
 end
 
 -- end gui
@@ -150,13 +150,13 @@ end
 
 function arrow(x, y, dx)
     return {
-        x=x + 4*dx,
+        x=x + 4 * dx,
         y=y,
         dx=dx,
         dist=64,
         dmg=1,
         animation={
-            static_player(frame(9, 0, 4*dx)),
+            static_player(frame(9, 0)),
         },
     }
 end
@@ -193,10 +193,10 @@ function playermove()
 	--fall
 	p1.y+=p1.dy
     checkvert(p1)
-    if p1.x > mapx_off + 127 then
-        mapx_off += 128
-    elseif p1.x < mapx_off then
-        mapx_off -= 128
+    if p1.x > map_x_off + 127 then
+        map_x_off += 128
+    elseif p1.x < map_x_off then
+        map_x_off -= 128
     end
 end
 
@@ -229,7 +229,7 @@ end
 
 function enemyctrl()
     for e in all(enemies) do
-        local sizefactor =8*e.size - 1
+        local sizefactor=8*e.size - 1
         if p1.x >= e.x and p1.x <= e.x + sizefactor and
         p1.y >= e.y and p1.y <= e.y + sizefactor then
             enemyattack(e, p1)
@@ -465,7 +465,7 @@ end
 
 function _draw()
     cls() --clear the screen
-    camera(mapx_off)
+    camera(map_x_off)
     if gameover then
         camera()
         print("game over", 32, 64, 7)
