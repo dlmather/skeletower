@@ -64,9 +64,9 @@ end
 
 -- gui
 
-function playerstats(cam_x)
-    print("health:"..tostr(p1.hp), cam_x, 122, 8)
-    print("cash:"..tostr(p1.cash), cam_x+64, 122, 9)
+function playerstats(cam_x, cam_y)
+    print("health:"..tostr(p1.x), cam_x, cam_y+122, 8)
+    print("cash:"..tostr(p1.y), cam_x+64, cam_y+122, 9)
 end
 
 -- end gui
@@ -138,6 +138,22 @@ function player_move_ctrl()
         add(projectiles, arrow(p1.x, p1.y, dx))
         sfx(0)
     end
+    local startx = p1.x
+    p1.x+=p1.dx
+    checkhoriz(p1, startx, 6)
+    for s in all(statics) do
+        if p1.x >= s.x and p1.x <= s.x + 7 and
+        p1.y >= s.y and p1.y <= s.y + 7 then
+            sfx(6)
+            p1.cash+=1
+            del(statics, s)
+        end
+    end
+	--accumulate gravity
+	p1.dy+=g.grav
+	--fall
+	p1.y+=p1.dy
+    checkvert(p1)
 end
 
 function draw_shop_menu(shop)
@@ -156,6 +172,15 @@ function draw_shop_menu(shop)
             end
             i+=1
         end
+end
+
+function item(spr, cost, effect, desc) 
+    return {
+        spr=spr,
+        cost=cost,
+        effect=effect,
+        desc=desc,
+    }
 end
 
 function can_shop(e)
@@ -202,25 +227,6 @@ function cannon(x, y)
     }
 end
 
-function playermove()
-    local startx = p1.x
-    p1.x+=p1.dx
-    checkhoriz(p1, startx, 6)
-    for s in all(statics) do
-        if p1.x >= s.x and p1.x <= s.x + 7 and
-        p1.y >= s.y and p1.y <= s.y + 7 then
-            sfx(6)
-            p1.cash+=1
-            del(statics, s)
-        end
-    end
-	--accumulate gravity
-	p1.dy+=g.grav
-	--fall
-	p1.y+=p1.dy
-    checkvert(p1)
-end
-
 function checkgameover()
     if p1.hp <= 0 then
         sfx(3)
@@ -236,7 +242,8 @@ end
 function spawn(wave)
     local e = wave[t]
     if e != nil then
-        add(enemies, e)
+        add(enemies, e(level.x + 200, level.y + 95, -1))
+        del(wave[t], e)
     end
 end
 
@@ -283,12 +290,12 @@ function enemyctrl()
     end
 end
 
-function enemybear()
+function enemybear(x,y,dx)
     return {
-        x=200,
-        y=96,
+        x=x,
+        y=y,
         hp=16,
-        dx=-0.25, 
+        dx=0.25*dx, 
         size=2,
         dmg=2,
         drop=0.5,
@@ -301,7 +308,7 @@ function enemybear()
     }
 end
 
-function enemyknight()
+function enemyknight(x,y,dx)
     local attack=animation({
         frame(39, 3, -2, -2),
         frame(40, 3, -6, -2),
@@ -312,10 +319,10 @@ function enemyknight()
         frame(43, 2),
     }, true)
     local k = {
-        x=200,
-        y=104,
+        x=x,
+        y=y,
         hp=6,
-        dx=-0.5, 
+        dx=0.5*dx, 
         spr={42,43},
         size=1,
         dmg=1,
@@ -465,9 +472,67 @@ end
 
 -- end animation
 
+-- level creation and wave
+
+function level(x, y, px, py, waves)
+    return {
+        x=x,
+        y=y,
+        px=px,
+        py=py,
+        waveidx=1,
+        waves=waves,
+    }
+end
+
+function spawn(fn, t)
+    return {
+        fn=fn,
+        t=t,
+    }
+end
+
+function wave(spawns)
+    return {
+        idx = 1,
+        spawns=spawns,
+    }
+end
+
+function run_wave(level)
+    local wave = level.waves[level.waveidx]
+    if wave == nil then
+        return
+    end
+    local s=wave.spawns[wave.idx]
+    if s != nil and s.t <= t then
+        st = s.t
+        add(enemies, s.fn(level.x+100, level.y+90, -1))
+        wave.idx+=1
+    end
+    if wave.idx >= #wave.spawns then
+        level.waveidx = -1
+    end
+end
+
+function create_levels()
+    spawns = {}
+    for i=1,2 do
+        add(spawns, spawn(enemyknight, 10*i))
+    end
+    levels = {
+        level(0, 14, 8, 200, {wave(spawns)}),
+        level(0, 0, 8, 104, {wave(spawns)}),
+    }
+    level_num = 1
+    level = levels[level_num]
+end
+
+-- end level creation and wave
 -- title screen
 
 function menu_init()
+    create_levels()
     update=menu_update
     draw=menu_draw
     music(0)
@@ -493,6 +558,31 @@ end
 
 -- end title screen
 
+-- level victory state
+
+function level_victory_init()
+    music(0)
+    update=level_victory_update
+    draw=level_victory_draw
+end
+
+function level_victory_update()
+    if (btn(4)) then
+        music(-1, 600)
+        level_num += 1
+        level = levels[level_num]
+        game_init()
+    end
+end
+
+function level_victory_draw()
+    cls()
+    camera()
+    print("you beat the level", 48, 64, 7)
+end
+
+-- end level victory state
+
 -- game state
 
 function game_init()
@@ -502,8 +592,8 @@ function game_init()
     p1=
     {
     	--position
-    	x=8,
-    	y=104,
+    	x=level.px,
+    	y=level.py,
     	--velocity
     	dx=0,
     	dy=0,
@@ -522,26 +612,16 @@ function game_init()
         shopping=false,
         cash=0,
     }
+    cannon_item = item(18, 1, function(p1)
+            mset(p1.shop.x/8, p1.shop.y/8, 6)
+            add(cannons, cannon(p1.shop.x, p1.shop.y))
+            end, "cannon")
+    potion_item = item(33, 1, function(p1) p1.hp += 5 end, "potion")
     shop_list={}
     shop_list[10] ={
         items={
-            {
-                cost=1,
-                spr=18,
-                desc="cannon",
-                effect=function(p1)
-                    mset(p1.shop.x/8, p1.shop.y/8, 6)
-                    add(cannons, cannon(p1.shop.x, p1.shop.y))
-                end,
-            },
-            {
-                cost=1,
-                spr=33,
-                desc="potion",
-                effect=function(p1)
-                    p1.hp += 5
-                end,
-            },
+            cannon_item,
+            potion_item,
         },
     }
     cannons={}
@@ -551,41 +631,42 @@ function game_init()
 end
 
 function game_update()
+    entities = {}
     t+=1
-    wave1={}
-    for i=1,3 do
-        wave1[60*i]=enemyknight()
-        wave1[68*i]=enemybear()
-    end
-    spawn(wave1)
+    run_wave(level)
     player_ctrl()
     enemyctrl()
     projectilectrl()
-    playermove()
+    for e in all(enemies) do
+        add(entities, e)
+    end
+    for p in all(projectiles) do
+        add(entities, p)
+    end
+    for s in all(statics) do 
+        add(entities, s)
+    end
+    for c in all(cannons) do
+        add(entities, c)
+    end
+    if level.waveidx==-1 and #enemies==0 and btnp(5) then
+        level_victory_init()
+    end
 end
 
 function game_draw()
     cls() --clear the screen
-    local cam_x = mid(0,p1.x-64,1024-128)
-    camera(cam_x, 0)
-    map(0,0,0,0,128,128) --draw map
-    for p in all(projectiles) do
-        play_entity_anim(p)
-    end
-    for c in all(cannons) do
-        play_entity_anim(c)
-    end
-    for e in all(enemies) do
+    local cam_x = mid(level.x,p1.x-64,1024-128)
+    camera(cam_x, level.y)
+    map(level.x,level.y,0,0,128,128) --draw map
+    for e in all(entities) do
         play_entity_anim(e)
     end
-    spr(1,p1.x,p1.y,1,1,p1.left) --draw player
+    spr(1,p1.x,p1.y-level.y*8,1,1,p1.left) --draw player
     if p1.shop != nil then
         draw_shop_menu(p1.shop)
     end
-    for s in all(statics) do
-        spr(15,s.x,s.y)
-    end
-    playerstats(cam_x)
+    playerstats(cam_x, level.y)
     if (checkgameover()) game_over_init()
 end
 
@@ -658,6 +739,21 @@ __map__
 0406050606060616161616161616161616161616161616161616161616161602000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0410060506060616161616161616161616161616161616161616161616161602000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 2323232323232302020302030202030302020202020202020202020202020202000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+1616161616161616161616161616161616161616161616161616161616161602000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0416161616161616161616161616161616161616161616161616161616161602000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0416161616161616161616161616161616161616161616161616161616161602000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0416161616161616161616161616161616161616161616161616161616161602000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0416161616161616161616161616161616161616161616161616161616161602000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0416161616161616161616161616161616161616161616161616161616161602000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0416161616161616161616161616050516161616161616161616161616161602000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0416161616161616161616161616080816161616161616161616161616161602000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0416161616161616161616161616060616161616161616161616161616161602000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0416161616161616161616160a160606160a1616161616161616161616161602000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0416161616161616161616160405050505041616161616161616161616161602000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0416161616161616161616050404040404040516161616161616161616161602000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0416161616161616161616161616161604041605161616161616161616161602000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0416161616161616161616161616161602020202020202020202020202020202000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0303030303030303030303030303030302020202020202000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __sfx__
 0107010123053270002b00024000270002b0000c0001100024000270002b00024000270002b0000c0001100024000270002b00024000270002b0000c0001100024000270002b00024000270002b0000c00011000
 011000000c1520c10218102391023c10239102181022b102181023910218102391023c102301023910239102181023910218102391023c102391021810221102181023910218102391023c102391023910239102
