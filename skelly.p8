@@ -18,7 +18,7 @@ function checkhoriz(e, start_x, x_off, y_off)
 	if e.dx<0 then x_off=7-x_off end
 	--look for a wall
     local xmove=(e.x+x_off)/8
-	local h=mget(xmove,(e.y+y_off)/8)
+	local h=mget(level.x+xmove,level.y + (e.y+y_off)/8)
     if fget(h,0) then
         e.x=start_x
         return true
@@ -29,7 +29,7 @@ end
 function checkvert(e, y_off)
     if y_off == nil then y_off = 0 end
 	--check bottom center.
-	local v=mget((e.x+4)/8,(e.y+8-y_off)/8)
+	local v=mget(level.x+(e.x+4)/8,level.y+(e.y+8-y_off)/8)
 	
 	--assume floating 
 	e.isgrounded=false
@@ -47,7 +47,7 @@ function checkvert(e, y_off)
 	
 	--hit ceiling
 	--check top center of e
-	v=mget((e.x+4)/8,(e.y+y_off)/8)
+	v=mget(level.x+(e.x+4)/8,level.y+(e.y+y_off)/8)
 	
 	--only check for ceilings when
 	--moving up
@@ -65,6 +65,7 @@ end
 -- gui
 
 function playerstats(cam_x, cam_y)
+    rectfill(0, 120, cam_x+128, cam_y+128, 0)
     print("health:"..tostr(p1.x), cam_x, cam_y+122, 8)
     print("cash:"..tostr(p1.y), cam_x+64, cam_y+122, 9)
 end
@@ -187,7 +188,7 @@ function can_shop(e)
     for i=-2,2 do
         local xmove=(e.x+(7*i))/8
         local ymove=(e.y+7)/8
-        local s=mget(xmove,ymove)
+        local s=mget(level.x+xmove,level.y+ymove)
         if fget(s, 2) and shop_list[s] != nil then
             p1.shop=shop_list[s]
             p1.shop.x=flr(xmove) * 8
@@ -238,14 +239,6 @@ end
 -- end player
 
 -- enemy
-
-function spawn(wave)
-    local e = wave[t]
-    if e != nil then
-        add(enemies, e(level.x + 200, level.y + 95, -1))
-        del(wave[t], e)
-    end
-end
 
 function enemyattack(e, p)
     p.hp-=e.dmg
@@ -474,7 +467,7 @@ end
 
 -- level creation and wave
 
-function level(x, y, px, py, waves)
+function create_level(x, y, waves)
     return {
         x=x,
         y=y,
@@ -499,15 +492,15 @@ function wave(spawns)
     }
 end
 
-function run_wave(level)
-    local wave = level.waves[level.waveidx]
+function run_wave()
+    local wave=level.waves[level.waveidx]
     if wave == nil then
         return
     end
     local s=wave.spawns[wave.idx]
     if s != nil and s.t <= t then
         st = s.t
-        add(enemies, s.fn(level.x+100, level.y+90, -1))
+        add(enemies, s.fn(200, 104, -1))
         wave.idx+=1
     end
     if wave.idx >= #wave.spawns then
@@ -521,8 +514,8 @@ function create_levels()
         add(spawns, spawn(enemyknight, 10*i))
     end
     levels = {
-        level(0, 14, 8, 200, {wave(spawns)}),
-        level(0, 0, 8, 104, {wave(spawns)}),
+        create_level(0, 0, {wave(spawns)}),
+        create_level(0, 15, {wave(spawns)}),
     }
     level_num = 1
     level = levels[level_num]
@@ -578,7 +571,7 @@ end
 function level_victory_draw()
     cls()
     camera()
-    print("you beat the level", 48, 64, 7)
+    print("you beat the level", 30, 64, 7)
 end
 
 -- end level victory state
@@ -592,8 +585,8 @@ function game_init()
     p1=
     {
     	--position
-    	x=level.px,
-    	y=level.py,
+    	x=8,
+    	y=96,
     	--velocity
     	dx=0,
     	dy=0,
@@ -613,7 +606,7 @@ function game_init()
         cash=0,
     }
     cannon_item = item(18, 1, function(p1)
-            mset(p1.shop.x/8, p1.shop.y/8, 6)
+            mset(level.x+p1.shop.x/8, level.y+p1.shop.y/8, 6)
             add(cannons, cannon(p1.shop.x, p1.shop.y))
             end, "cannon")
     potion_item = item(33, 1, function(p1) p1.hp += 5 end, "potion")
@@ -633,7 +626,7 @@ end
 function game_update()
     entities = {}
     t+=1
-    run_wave(level)
+    run_wave()
     player_ctrl()
     enemyctrl()
     projectilectrl()
@@ -656,17 +649,17 @@ end
 
 function game_draw()
     cls() --clear the screen
-    local cam_x = mid(level.x,p1.x-64,1024-128)
-    camera(cam_x, level.y)
+    local cam_x = mid(0,p1.x-64,1024-128)
+    camera(cam_x, 0)
     map(level.x,level.y,0,0,128,128) --draw map
     for e in all(entities) do
         play_entity_anim(e)
     end
-    spr(1,p1.x,p1.y-level.y*8,1,1,p1.left) --draw player
+    spr(1,p1.x,p1.y,1,1,p1.left) --draw player
     if p1.shop != nil then
         draw_shop_menu(p1.shop)
     end
-    playerstats(cam_x, level.y)
+    playerstats(cam_x, 0)
     if (checkgameover()) game_over_init()
 end
 
@@ -751,9 +744,9 @@ __map__
 0416161616161616161616160a160606160a1616161616161616161616161602000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0416161616161616161616160405050505041616161616161616161616161602000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0416161616161616161616050404040404040516161616161616161616161602000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0416161616161616161616161616161604041605161616161616161616161602000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0416161616161616161616161616161602020202020202020202020202020202000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0303030303030303030303030303030302020202020202000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0416161616161616161605160404040404041605161616161616161616161602000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0416161616161616160516160404040404040416051616161616161616161602000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0303030303030303030303030303030302020202020202030303030303030303000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __sfx__
 0107010123053270002b00024000270002b0000c0001100024000270002b00024000270002b0000c0001100024000270002b00024000270002b0000c0001100024000270002b00024000270002b0000c00011000
 011000000c1520c10218102391023c10239102181022b102181023910218102391023c102301023910239102181023910218102391023c102391021810221102181023910218102391023c102391023910239102
